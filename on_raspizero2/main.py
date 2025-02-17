@@ -66,7 +66,26 @@ class Sensor:
         
         self.draw.line([(0, 9), (12, 9)], width=1, fill=255)  # horizon line for the Sun. Will make it move according to where the Sun is
         self.draw.line([(50, 9), (59, 9)], width=1, fill=255)  # horizon line for the Moon. Will make it move according to where the Moon is
-        self.draw.polygon([(100, 23), (110, 25), (100, 27)], fill=255)  # Arrowhead
+        
+        
+        # rudimentary targetting arrows        
+        target_el = 45
+        target_az = 45
+        
+        arrow = [(103, 25), (107, 25), (107, 27), (103, 27)]
+        
+        if abs(self.azimuth - target_az) >= abs(self.elevation - target_el):
+            if self.azimuth - target_az > 0:
+                arrow = [(100, 23), (110, 25), (100, 27)]
+            else:
+                arrow = [(110, 23), (100, 25), (110, 27)]
+        else:
+            if self.elevation - target_el > 0:
+                arrow = [(102, 27), (105, 23), (109, 27)]
+            else:
+                arrow = [(102, 23), (105, 27), (109, 23)]
+            
+        self.draw.polygon(arrow, fill=255)  # Arrowhead
         
         self.oled.image(self.image)
         self.oled.show()
