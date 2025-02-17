@@ -11,10 +11,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 class Sensor:
-    def __init__(self, azimuth=0.0, elevation=0.0, roll=0.0):
-        self.azimuth = azimuth
-        self.elevation = elevation
-        self.roll = roll
+    def __init__(self):
+        self.azimuth = 0.0
+        self.elevation = 0.0
+        self.roll = 0.0
+        
+        # geo position, "null island"
+        self.lat = 0.0
+        self.lon = 0.0
+        self.alt = 0.0
         
         # UART setup for BNO055 using PySerial
         self.uart = serial.Serial("/dev/serial0", baudrate=115200)
@@ -95,5 +100,8 @@ if __name__ == "__main__":
     
     # I will change this later to take the value whenever the geo position is called
     declination = Sensor.correct_azimuth(args.latitude, args.longitude)
+    
     sensor = Sensor()
+    sensor.lat = args.latitude
+    sensor.lon = args.longitude
     sensor.run(declination)
