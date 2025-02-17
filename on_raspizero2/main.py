@@ -21,6 +21,9 @@ class Sensor:
         self.lon = 0.0
         self.alt = 0.0
         
+        # magnetic correction to true north
+        self.declination = 0.0
+        
         # UART setup for BNO055 using PySerial
         self.uart = serial.Serial("/dev/serial0", baudrate=115200)
         self.sensor = adafruit_bno055.BNO055_UART(self.uart)
@@ -41,6 +44,10 @@ class Sensor:
 
 
     def update_sensor_values(self):
+        
+        # I will change this later to take the value whenever the geo position is called
+        self.declination = Sensor.correct_azimuth(self.lat, self.lon)
+    
         # Get orientation (azimuth, pitch, roll)
         euler = self.sensor.euler
         if euler is not None:
@@ -75,13 +82,13 @@ class Sensor:
         return geomag.declination(latitude, longitude)
 
 
-    def run(self, declination):
+    def run(self):
         try:
             print("Starting sensor display...")
             
             while True:
                 self.update_sensor_values()
-                sys.stdout.write(f"\rAz. (Yaw): {self.azimuth:+06.2f}° Decl. {declination:.2f}°, Elev. (Pitch): {self.elevation:+05.2f}°, Roll: {self.roll:.2f}°   ")
+                sys.stdout.write(f"\rAz. (Yaw): {self.azimuth:+06.2f}° Decl. {self.declination:.2f}°, Elev. (Pitch): {self.elevation:+05.2f}°, Roll: {self.roll:.2f}°   ")
                 sys.stdout.flush()
                 self.display_text()
                 time.sleep(0.1)
@@ -98,10 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("longitude", type=float, help="Longitude of the measurement location")
     args = parser.parse_args()
     
-    # I will change this later to take the value whenever the geo position is called
-    declination = Sensor.correct_azimuth(args.latitude, args.longitude)
-    
     sensor = Sensor()
     sensor.lat = args.latitude
     sensor.lon = args.longitude
-    sensor.run(declination)
+    sensor.run()
