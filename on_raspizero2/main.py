@@ -23,7 +23,7 @@ class Sensor:
         # OLED display setup
         oled_reset = digitalio.DigitalInOut(board.D4)
         self.WIDTH = 128
-        self.HEIGHT = 64
+        self.HEIGHT = 32
         i2c = board.I2C()
         self.oled = adafruit_ssd1306.SSD1306_I2C(self.WIDTH, self.HEIGHT, i2c, addr=0x3D, reset=oled_reset)
         
