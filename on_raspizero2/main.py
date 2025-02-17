@@ -2,63 +2,98 @@ import time
 import serial
 import adafruit_bno055
 import argparse
-import geomag  # Install with `pip install geomag`
+import geomag
 import sys
+import board
+import digitalio
+import adafruit_ssd1306
+from PIL import Image, ImageDraw, ImageFont
 
 
-# UART setup for BNO055 using PySerial
-uart = serial.Serial("/dev/serial0", baudrate=115200)  # "/dev/serial0" is the default UART port on Raspberry Pi
-
-# Create the BNO055 sensor object with the PySerial connection
-sensor = adafruit_bno055.BNO055_UART(uart)
-
-
-def correct_azimuth(latitude, longitude):
-    """
-    Corrects the magnetic azimuth to true north by considering magnetic declination.
-    
-    :param latitude: Latitude of the measurement location
-    :param longitude: Longitude of the measurement location
-    :return: True azimuth (degrees)
-    """
-    # Get the magnetic declination at the given location
-    declination = geomag.declination(latitude, longitude)
-    
-    return declination
-
-
-def main(declination):
-    try:
-        print("starting")
-    
-        while True:
+class Sensor:
+    def __init__(self, azimuth=0.0, elevation=0.0, roll=0.0):
+        self.azimuth = azimuth
+        self.elevation = elevation
+        self.roll = roll
         
-            # Get orientation (azimuth, pitch, roll)
-            euler = sensor.euler  # (yaw, pitch, roll)
-            if euler is not None:
-                yaw, pitch, roll = euler
-                # Refresh the output line in terminal              
-                sys.stdout.write(f"\rAz. (Yaw): {yaw:.2f}° Decl. {declination:.2f}°, Elev. (Pitch): {pitch:.2f}°, Roll: {roll:.2f}°   ")
-                sys.stdout.flush()  # Ensure the output is updated immediately
+        # UART setup for BNO055 using PySerial
+        self.uart = serial.Serial("/dev/serial0", baudrate=115200)
+        self.sensor = adafruit_bno055.BNO055_UART(self.uart)
+        
+        # OLED display setup
+        oled_reset = digitalio.DigitalInOut(board.D4)
+        self.WIDTH = 128
+        self.HEIGHT = 64
+        i2c = board.I2C()
+        self.oled = adafruit_ssd1306.SSD1306_I2C(self.WIDTH, self.HEIGHT, i2c, addr=0x3D, reset=oled_reset)
+        
+        self.oled.fill(0)
+        self.oled.show()
+        
+        self.image = Image.new("1", (self.oled.width, self.oled.height))
+        self.draw = ImageDraw.Draw(self.image)
+        self.font = ImageFont.load_default()
 
-            time.sleep(0.1)  # Short delay
 
-    except KeyboardInterrupt:
-        print("\nExiting program.")
-    finally:
-        GPIO.cleanup()  # Reset GPIO settings
+    def update_sensor_values(self):
+        # Get orientation (azimuth, pitch, roll)
+        euler = self.sensor.euler
+        if euler is not None:
+            self.azimuth, self.elevation, self.roll = euler
+
+
+    def display_text(self):
+        self.draw.rectangle((0, 0, self.WIDTH, self.HEIGHT), outline=0, fill=0)  # Clear screen
+        
+
+        el_sign = "+" if self.elevation >= 0 else "-"
+        
+        self.draw.text((1, 10), f"AZ {abs(self.azimuth):06.2f} EL {el_sign}{abs(self.elevation):05.2f}", font=self.font, fill=255)
+        self.draw.text((1, 0), "O-12.0 C-12.0 tx", font=self.font, fill=255) # Sun and Moon positions
+        self.draw.text((1, 19), "* STARNAME", font=self.font, fill=255) # the closest star's name
+        self.draw.polygon([(100, 23), (110, 25), (100, 27)], fill=255)  # Arrowhead
+        
+        self.oled.image(self.image)
+        self.oled.show()
+
+
+    @staticmethod
+    def correct_azimuth(latitude, longitude):
+        """
+        Corrects the magnetic azimuth to true north by considering magnetic declination.
+    
+        :param latitude: Latitude of the measurement location
+        :param longitude: Longitude of the measurement location
+        :return: Declination (degrees)
+        """
+        # Get the magnetic declination at the given location
+        return geomag.declination(latitude, longitude)
+
+
+    def run(self, declination):
+        try:
+            print("Starting sensor display...")
+            
+            while True:
+                self.update_sensor_values()
+                sys.stdout.write(f"\rAz. (Yaw): {self.azimuth:+06.2f}° Decl. {declination:.2f}°, Elev. (Pitch): {self.elevation:+05.2f}°, Roll: {self.roll:.2f}°   ")
+                sys.stdout.flush()
+                self.display_text()
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("\nExiting program.")
+        finally:
+            GPIO.cleanup()
 
 
 if __name__ == "__main__":
-    # Set up argument parsing
     parser = argparse.ArgumentParser(description="Correct azimuth from magnetometer to true north.")
     parser.add_argument("latitude", type=float, help="Latitude of the measurement location")
     parser.add_argument("longitude", type=float, help="Longitude of the measurement location")
-    
-    # Parse arguments
     args = parser.parse_args()
     
-    # Declination for correcting the azimuth
-    declination = correct_azimuth(args.latitude, args.longitude)
-    
-    main(declination)
+    # I will change this later to take the value whenever the geo position is called
+    declination = Sensor.correct_azimuth(args.latitude, args.longitude)
+    sensor = Sensor()
+    sensor.run(declination)
