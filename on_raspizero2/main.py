@@ -61,8 +61,11 @@ class Sensor:
         el_sign = "+" if self.elevation >= 0 else "-"
         
         self.draw.text((1, 10), f"AZ {abs(self.azimuth):06.2f} EL {el_sign}{abs(self.elevation):05.2f}", font=self.font, fill=255)
-        self.draw.text((1, 0), "O-12.0 C-12.0 tx", font=self.font, fill=255) # Sun and Moon positions
+        self.draw.text((4, 0), "O -12.0 C -12.0 tx", font=self.font, fill=255) # Sun and Moon positions
         self.draw.text((1, 19), "* STARNAME", font=self.font, fill=255) # the closest star's name
+        
+        self.draw.line([(0, 9), (12, 9)], width=1, fill=255)  # horizon line for the Sun. Will make it move according to where the Sun is
+        self.draw.line([(50, 9), (59, 9)], width=1, fill=255)  # horizon line for the Moon. Will make it move according to where the Moon is
         self.draw.polygon([(100, 23), (110, 25), (100, 27)], fill=255)  # Arrowhead
         
         self.oled.image(self.image)
