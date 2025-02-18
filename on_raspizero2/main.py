@@ -8,6 +8,7 @@ import board
 import digitalio
 import adafruit_ssd1306
 from PIL import Image, ImageDraw, ImageFont
+import json
 
 
 class Sensor:
@@ -20,6 +21,11 @@ class Sensor:
         self.lat = 0.0
         self.lon = 0.0
         self.alt = 0.0
+        
+        # gnss
+        self.nextupdate = 0.0
+        self.nextdt = 1.0 # period for allowing updates
+        self.fix = 0
         
         # magnetic correction to true north
         self.declination = 0.0
@@ -43,6 +49,38 @@ class Sensor:
         self.font = ImageFont.load_default()
 
 
+        
+    def get_position_and_time(self, file_path = "position_time.json"):
+        
+        if time.time() > self.nextupdate:
+            
+            self.nextupdate = time.time() + self.nextdt
+                
+            try:
+                # Attempt to open and read the JSON file
+                with open(file_path, "r") as file:
+                    data = json.load(file)
+
+                # Extract position data
+                self.lat = data["position"]["lat"]
+                self.lon = data["position"]["lon"]
+                self.alt = data["position"]["alt"]
+
+                # Extract time data
+                timestamp = data["time"]["timestamp"]
+                self.fix = data["time"]["fix"]
+
+
+            except FileNotFoundError:
+                print(f"Error: The file '{file_path}' was not found.")
+            except json.JSONDecodeError:
+                print(f"Error: The file '{file_path}' is not a valid JSON file.")
+            except PermissionError:
+                print(f"Error: Permission denied when accessing '{file_path}'.")
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+
+
     def update_sensor_values(self):
         
         # I will change this later to take the value whenever the geo position is called
@@ -58,10 +96,10 @@ class Sensor:
         self.draw.rectangle((0, 0, self.WIDTH, self.HEIGHT), outline=0, fill=0)  # Clear screen
         
 
+        fix_sign = "." if self.fix == 0 else "x"
         el_sign = "+" if self.elevation >= 0 else "-"
-        
         self.draw.text((1, 10), f"AZ {abs(self.azimuth):06.2f} EL {el_sign}{abs(self.elevation):05.2f}", font=self.font, fill=255)
-        self.draw.text((4, 0), "O -12.0 C -12.0 tx", font=self.font, fill=255) # Sun and Moon positions
+        self.draw.text((4, 0), f"O -12.0 C -12.0 t{fix_sign}", font=self.font, fill=255) # Sun and Moon positions
         self.draw.text((1, 19), "* STARNAME", font=self.font, fill=255) # the closest star's name
         
         self.draw.line([(0, 9), (12, 9)], width=1, fill=255)  # horizon line for the Sun. Will make it move according to where the Sun is
@@ -109,7 +147,8 @@ class Sensor:
             print("Starting sensor display...")
             
             while True:
-                self.update_sensor_values()
+                self.get_position_and_time()
+                self.update_sensor_values()            
                 sys.stdout.write(f"\rAz. (Yaw): {self.azimuth:+06.2f}° Decl. {self.declination:.2f}°, Elev. (Pitch): {self.elevation:+05.2f}°, Roll: {self.roll:.2f}°   ")
                 sys.stdout.flush()
                 self.display_text()
