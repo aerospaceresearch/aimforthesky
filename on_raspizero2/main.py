@@ -9,7 +9,13 @@ import digitalio
 import adafruit_ssd1306
 from PIL import Image, ImageDraw, ImageFont
 import json
+from astropy.time import Time
+from skyfield.api import load, wgs84
 
+eph = load('de421.bsp') # note: somehow I could not directly download it on the raspi zero2. I uploaded my copy directly into the folder.
+sun, moon, earth = eph['sun'], eph['moon'], eph['earth']
+
+ts = load.timescale()
 
 class Sensor:
     def __init__(self):
@@ -93,17 +99,69 @@ class Sensor:
 
 
     def display_text(self):
+        
+        station = wgs84.latlon(self.lat, self.lon, self.alt)
+        
+        timestamp = time.time()
+        observing_time = Time(timestamp, format="unix", scale="utc")
+        t0 = ts.from_astropy(observing_time)  
+        
+        
+        station_on_earth = earth + station
+        b = station_on_earth.at(t0)
+        moon_obs = b.observe(moon).apparent()
+        moon_alt, moon_az, moon_distance = moon_obs.altaz()
+        sun_obs = b.observe(sun).apparent()
+        sun_alt, sun_az, sun_distance = sun_obs.altaz()
+        
+        
+        
         self.draw.rectangle((0, 0, self.WIDTH, self.HEIGHT), outline=0, fill=0)  # Clear screen
         
-
         fix_sign = "." if self.fix == 0 else "x"
         el_sign = "+" if self.elevation >= 0 else "-"
+        el_sun_sign = "+" if sun_alt.degrees >= 0 else "-"
+        el_moon_sign = "+" if moon_alt.degrees >= 0 else "-"
+        
         self.draw.text((1, 10), f"AZ {abs(self.azimuth):06.2f} EL {el_sign}{abs(self.elevation):05.2f}", font=self.font, fill=255)
-        self.draw.text((4, 0), f"O -12.0 C -12.0 t{fix_sign}", font=self.font, fill=255) # Sun and Moon positions
+        self.draw.text((4, 0), f"O {el_sun_sign}{abs(sun_alt.degrees):04.1f} C {el_moon_sign}{abs(moon_alt.degrees):04.1f} t{fix_sign}", font=self.font, fill=255) # Sun and Moon positions
         self.draw.text((1, 19), "* STARNAME", font=self.font, fill=255) # the closest star's name
         
-        self.draw.line([(0, 9), (12, 9)], width=1, fill=255)  # horizon line for the Sun. Will make it move according to where the Sun is
-        self.draw.line([(50, 9), (59, 9)], width=1, fill=255)  # horizon line for the Moon. Will make it move according to where the Moon is
+        sun0_display_y = 0
+        if sun_alt.degrees >= -0.5 and sun_alt.degrees <= 0.5:
+            sun0_display_y = 10 - int((sun_alt.degrees / -0.5) * 10)
+        elif sun_alt.degrees > 0.5:
+            sun0_display_y = 10
+            
+        sun1_display_y = 0
+        if sun_alt.degrees >= -6 and sun_alt.degrees <= 0.5:
+            sun1_display_y = 10 - int((sun_alt.degrees / -6.0) * 10)
+        elif sun_alt.degrees > 0.5:
+            sun1_display_y = 10
+            
+        sun2_display_y = 0
+        if sun_alt.degrees >= -12 and sun_alt.degrees <= 0.5:
+            sun2_display_y = 10 - int((sun_alt.degrees / -12.0) * 10)
+        elif sun_alt.degrees > 0.5:
+            sun2_display_y = 10
+        
+        sun3_display_y = 0
+        if sun_alt.degrees >= -18 and sun_alt.degrees <= 0.5:
+            sun3_display_y = 10 - int((sun_alt.degrees / -18.0) * 10)
+        elif sun_alt.degrees > 0.5:
+            sun3_display_y = 10
+            
+        self.draw.line([(0, sun3_display_y), (12, sun3_display_y)], width=1, fill=255)
+        self.draw.line([(0, sun2_display_y), (12, sun2_display_y)], width=1, fill=255)
+        self.draw.line([(0, sun1_display_y), (12, sun1_display_y)], width=1, fill=255)  
+        self.draw.line([(0, sun0_display_y), (12, sun0_display_y)], width=1, fill=255)  # horizon line for the Sun. Will make it move according to where the Sun is
+        
+        moon_display_y = 0
+        if sun_alt.degrees >= -0.5 and sun_alt.degrees <= 0.5:
+            moon_display_y = 10 - int((sun_alt.degrees / -0.5) * 10)
+        elif sun_alt.degrees > 0.5:
+            moon_display_y = 10
+        self.draw.line([(50, moon_display_y), (59, moon_display_y)], width=1, fill=255)  # horizon line for the Moon. Will make it move according to where the Moon is
         
         
         # rudimentary targetting arrows        
@@ -148,7 +206,8 @@ class Sensor:
             
             while True:
                 self.get_position_and_time()
-                self.update_sensor_values()            
+                self.update_sensor_values()
+                              
                 sys.stdout.write(f"\rAz. (Yaw): {self.azimuth:+06.2f}° Decl. {self.declination:.2f}°, Elev. (Pitch): {self.elevation:+05.2f}°, Roll: {self.roll:.2f}°   ")
                 sys.stdout.flush()
                 self.display_text()
